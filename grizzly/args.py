@@ -100,6 +100,11 @@ class CommonArgs:
             help="Headless mode. 'default' uses browser's built-in headless mode.",
         )
         self.launcher_grp.add_argument(
+            "--https",
+            action="store_true",
+            help="Enable HTTPS. (default: %(default)s)",
+        )
+        self.launcher_grp.add_argument(
             "--launch-attempts",
             type=int,
             default=3,

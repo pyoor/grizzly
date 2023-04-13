@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from logging import DEBUG, getLogger
 from os import getpid
+from shutil import rmtree
 
 from sapphire import Sapphire
 
@@ -13,7 +14,14 @@ from .common.reporter import (
     FilesystemReporter,
     FuzzManagerReporter,
 )
-from .common.utils import Exit, configure_logging, display_time_limits, time_limits
+from .common.utils import (
+    Exit,
+    configure_logging,
+    display_time_limits,
+    generate_certificates,
+    grz_tmp,
+    time_limits,
+)
 from .session import Session
 from .target import Target, TargetLaunchError, TargetLaunchTimeout
 
@@ -42,6 +50,7 @@ def main(args):
         LOG.info("Running with Valgrind. This will be SLOW!")
 
     adapter = None
+    cert_path = None
     complete_with_results = False
     target = None
     try:
@@ -60,12 +69,19 @@ def main(args):
         else:
             relaunch = args.relaunch
 
+        certs = {}
+        if args.https:
+            LOG.info("HTTPS enabled")
+            cert_path = grz_tmp("certs", str(getpid()))
+            certs = generate_certificates(cert_path)
+
         LOG.debug("initializing the Target %r", args.platform)
         target = load_plugin(args.platform, "grizzly_targets", Target)(
             args.binary,
             args.launch_timeout,
             args.log_limit,
             args.memory,
+            certs=certs,
             headless=args.headless,
             pernosco=args.pernosco,
             rr=args.rr,
@@ -94,7 +110,7 @@ def main(args):
         # call 'window.close()' after a second.
         # launch http server used to serve test cases
         LOG.debug("starting Sapphire server")
-        with Sapphire(auto_close=1, timeout=timeout) as server:
+        with Sapphire(auto_close=1, timeout=timeout, certs=certs) as server:
             target.reverse(server.port, server.port)
             LOG.debug("initializing the Session")
             with Session(
@@ -143,6 +159,8 @@ def main(args):
         if adapter is not None:
             LOG.debug("calling adapter.cleanup()")
             adapter.cleanup()
+        if cert_path is not None:
+            rmtree(cert_path)
         LOG.info("Done.")
 
     if complete_with_results:
